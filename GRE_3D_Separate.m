@@ -35,11 +35,11 @@ params.nPE              = 100;
 params.n3D              = 80;
 params.MatrixSize       = [params.nRO, params.nPE, params.n3D];       % [a.u.] RO x PE x 3D
 
-params.AccelerationPE   = 3  ; % acceleration factor for phase direction.
-params.Acceleration3D   = 3  ; % acceleration factor for partition direction.
+params.AccelerationPE   = 1  ; % acceleration factor for phase direction.
+params.Acceleration3D   = 1  ; % acceleration factor for partition direction.
 params.nRefLinePE       = 24 ; % Number of fully sampled lines at center, along PE
 params.nRefLine3D       = 24 ; % Number of fully sampled lines at center, along 3D
-params.CAIPIShift       = 2  ;
+params.CAIPIShift       = 0  ;
 params.DimFast          = 'PE' ; % 'PE' or '3D'; which dimension is stepped through first
 
 % Array of TEs. Non-positive values will be interperted as using minimum TE possible.
@@ -54,7 +54,7 @@ params.nTE              = numel(params.TE);
 % When acquiring with multiple TEs, should the RO gradient alternate in
 % sign (faster) or always have the same sign (slower). Switching sign is
 % refered to as bi-polar
-params.bBipolarROGrads  = true ;
+params.bBipolarROGrads  = false ;
 
 
 % RF pulse
@@ -181,8 +181,8 @@ RFSpoilPhaseShift = 0                   ; % [rad] Next step of RF phase (updates
 % alternate, so we wan to ensure we always start at the same sign.)
 Grad.ROAmp0 = Grad.GRO_acq.amplitude ;
 %%
-seq.addBlock(mr.makeLabel('SET', 'REP', 0));
-for irep = 1:Actual.nRep
+
+for iTE = 1:Actual.nTE
 % Loop over TR: non-positive counter values mean dummy scan (ky=kz=0). 
 % Otherwise, advance in the PE3DOrder table of phase encodes (PE & 3D) 
 for TRCounter = (-Actual.nDummy+1):size(PE3D.PE3DOrder, 1)
@@ -261,100 +261,76 @@ for TRCounter = (-Actual.nDummy+1):size(PE3D.PE3DOrder, 1)
     % (In bi-polar multi-echo, each time we flip the sign of the RO gradient). 
     LabelReverse = Label.lblResetRev ; % Don't reverse the first time
 
-    for iTE = 1:Actual.nTE
-        % Prepare for bi-polar or mono-polar RO grads in multi TE
-        
-        % For TEs beyond the first we have to either switch the RO direction
-        % alternatingly, or insert a rephaser before we can re-use our RO gradient
-        if (iTE > 1)
-            if (Actual.bBipolarROGrads)
-                % We are in bi-polar multi TE mode, so switch sign of RO gradient
-                Grad.GRO_acq.amplitude = (-1)^(iTE-1) * Grad.ROAmp0 ;
-                % Switch between reversing ADC or not.
-                if (mod(iTE, 2) == 1) % odd (count from 1)
-                    LabelReverse = Label.lblResetRev ;
-                else % Even echo
-                    LabelReverse = Label.lblSetRev   ;
-                end
-            
-            else % monopolar case
-                % We have to fully undo the last RO gradient before we can run the next.
-                seq.addBlock(Grad.GRO_acqUndo) ;
-                
-                % Update duration within TR
-                TimeInTR = TimeInTR + seq.blockDurations(end) ;
-                % Update time from "excitation"
-                TimeFromExcite = TimeFromExcite + seq.blockDurations(end) ;
-            end
-        end
-        
-        % Insert TE filler delay and the acqusition 
-        % ------------------------------------------
-        
-        % Set filler delay to achieve requested TE (rounded up later)
-        if (Actual.TE(iTE) < 0)
-            % Negative TE is interperted as using the minimal TE possible.
-            TEFill = 0 ;
-        else % try and achieve requested TE
-            TEFill = Actual.TE(iTE) - (TimeFromExcite + Delay.ADCDelay + Delay.ADCDuration/2) ;
-        end
-    
-        % Sanity check
-        if (TEFill < 0)
-            error(['Cannot achieve desired TE[%d] = %f ms. ' 'Minimum possible is %f ms.'], ...
-                iTE, 1e3*Actual.TE(iTE), 1e3*(Actual.TE(iTE) - TEFill))
-        else
-            TEFill = round(TEFill/sys.gradRasterTime)*sys.gradRasterTime ; % Round to gradient raster
-        end
-
-        % Set ADC labels (PE and partition). Note that the first index of each
-        % label is zero (instead of marking k=0 position as zero index).
-        % NOTE: We set the labels explicitly (using 'SET'), because the order
-        %       may be arbitrary (depending on the order within PE3DOrder).
-        Label_PE = mr.makeLabel('SET', 'LIN', Idx_PE - PE3D.IdxMin_PE) ; % PE
-        Label_3D = mr.makeLabel('SET', 'PAR', Idx_3D - PE3D.IdxMin_3D) ; % 3D
-    
-        LabelRefUse       = Label.lblResetRefScan       ;
-        LabelImaAndRefUse = Label.lblResetRefAndImaScan ;
-        % TRCounter > 0 only when bADCOn, so we add that to our test
-        if bADCOn  && PE3D.bRef(TRCounter) % parallel imaging reference line
-            % Reference line, so mark it as such.
-            LabelRefUse = Label.lblSetRefScan ; 
-            if PE3D.bImaAndRef(TRCounter) % Also a regular imaging line
-                % reference and(!) imaging line, so mark it as such.
-                LabelImaAndRefUse = Label.lblSetRefAndImaScan ;
-            end
-        end
+    % nTE
+    % Prepare for bi-polar or mono-polar RO grads in multi TE
     
     
-        % Add delay to events (and remove it after adding to block)
-        Grad.GRO_acq.delay     = Grad.GRO_acq.delay     + TEFill ;
-        ADC.adc.delay          = ADC.adc.delay          + TEFill ;
-        Delay.ROADCDelay.delay = Delay.ROADCDelay.delay + TEFill ;
+    % Insert TE filler delay and the acqusition 
+    % ------------------------------------------
     
-        if (bADCOn) % ADC used
-            seq.addBlock(Grad.GRO_acq, ADC.adc, ...
-                       Delay.ROADCDelay, ... ensure we are on the block raster
-                       Label_PE, Label_3D, Label.lblSetEchos(iTE), ...
-                       LabelRefUse, LabelImaAndRefUse, ...
-                       LabelReverse) ; 
-        else % no ADC
-            seq.addBlock(Grad.GRO_acq, Delay.ROADCDelay) ; % ensure consistancy + the block raster
-        end
-    
-        % remove extra delay (for next round)
-        Grad.GRO_acq.delay     = Grad.GRO_acq.delay     - TEFill ;
-        ADC.adc.delay          = ADC.adc.delay          - TEFill ;
-        Delay.ROADCDelay.delay = Delay.ROADCDelay.delay - TEFill ;
-
-        % update actual TE
-        Actual.TE(iTE) = TimeFromExcite + TEFill + Delay.ADCDelay + Delay.ADCDuration/2 ;
-        
-        % Update duration within TR
-        TimeInTR = TimeInTR + seq.blockDurations(end) ;
-        % Update time from "excitation"
-        TimeFromExcite = TimeFromExcite + seq.blockDurations(end) ;
+    % Set filler delay to achieve requested TE (rounded up later)
+    if (Actual.TE(iTE) < 0)
+        % Negative TE is interperted as using the minimal TE possible.
+        TEFill = 0 ;
+    else % try and achieve requested TE
+        TEFill = Actual.TE(iTE) - (TimeFromExcite + Delay.ADCDelay + Delay.ADCDuration/2) ;
     end
+
+    % Sanity check
+    if (TEFill < 0)
+        error(['Cannot achieve desired TE[%d] = %f ms. ' 'Minimum possible is %f ms.'], ...
+            iTE, 1e3*Actual.TE(iTE), 1e3*(Actual.TE(iTE) - TEFill))
+    else
+        TEFill = round(TEFill/sys.gradRasterTime)*sys.gradRasterTime ; % Round to gradient raster
+    end
+
+    % Set ADC labels (PE and partition). Note that the first index of each
+    % label is zero (instead of marking k=0 position as zero index).
+    % NOTE: We set the labels explicitly (using 'SET'), because the order
+    %       may be arbitrary (depending on the order within PE3DOrder).
+    Label_PE = mr.makeLabel('SET', 'LIN', Idx_PE - PE3D.IdxMin_PE) ; % PE
+    Label_3D = mr.makeLabel('SET', 'PAR', Idx_3D - PE3D.IdxMin_3D) ; % 3D
+
+    LabelRefUse       = Label.lblResetRefScan       ;
+    LabelImaAndRefUse = Label.lblResetRefAndImaScan ;
+    % TRCounter > 0 only when bADCOn, so we add that to our test
+    if bADCOn  && PE3D.bRef(TRCounter) % parallel imaging reference line
+        % Reference line, so mark it as such.
+        LabelRefUse = Label.lblSetRefScan ; 
+        if PE3D.bImaAndRef(TRCounter) % Also a regular imaging line
+            % reference and(!) imaging line, so mark it as such.
+            LabelImaAndRefUse = Label.lblSetRefAndImaScan ;
+        end
+    end
+
+
+    % Add delay to events (and remove it after adding to block)
+    Grad.GRO_acq.delay     = Grad.GRO_acq.delay     + TEFill ;
+    ADC.adc.delay          = ADC.adc.delay          + TEFill ;
+    Delay.ROADCDelay.delay = Delay.ROADCDelay.delay + TEFill ;
+
+    if (bADCOn) % ADC used
+        seq.addBlock(Grad.GRO_acq, ADC.adc, ...
+                   Delay.ROADCDelay, ... ensure we are on the block raster
+                   Label_PE, Label_3D, Label.lblSetEchos(iTE), ...
+                   LabelRefUse, LabelImaAndRefUse, ...
+                   LabelReverse) ; 
+    else % no ADC
+        seq.addBlock(Grad.GRO_acq, Delay.ROADCDelay) ; % ensure consistancy + the block raster
+    end
+
+    % remove extra delay (for next round)
+    Grad.GRO_acq.delay     = Grad.GRO_acq.delay     - TEFill ;
+    ADC.adc.delay          = ADC.adc.delay          - TEFill ;
+    Delay.ROADCDelay.delay = Delay.ROADCDelay.delay - TEFill ;
+
+    % update actual TE
+    Actual.TE(iTE) = TimeFromExcite + TEFill + Delay.ADCDelay + Delay.ADCDuration/2 ;
+    
+    % Update duration within TR
+    TimeInTR = TimeInTR + seq.blockDurations(end) ;
+    % Update time from "excitation"
+    TimeFromExcite = TimeFromExcite + seq.blockDurations(end) ;
 
   
     % -----------------------------------------------------------------------
@@ -411,7 +387,6 @@ for TRCounter = (-Actual.nDummy+1):size(PE3D.PE3DOrder, 1)
     % Update duration within TR
     TimeInTR = TimeInTR + seq.blockDurations(end) ;
 end
-seq.addBlock(mr.makeLabel('INC', 'REP', 1));
 end
 
 %% timing & PNS & definition
@@ -421,7 +396,7 @@ end
 
 outpath = 'E:/pulseq/idea/pulseq_150/GRE/';
 
-seqname = sprintf('GRE_%s_%s_%s_tr%s_%ste_Bi', str_res, str_mat, str_r, ...
+seqname = sprintf('GRE_%s_%s_%s_tr%s_%ste_Sepa', str_res, str_mat, str_r, ...
     num2str(Actual.TR*1e3), num2str(Actual.nTE));
 seq.write(strcat(outpath, seqname,'.seq'));
 save(strcat(outpath, seqname),'params','Actual', 'PE3D');
