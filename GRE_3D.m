@@ -1,4 +1,4 @@
-% clc; clear; close all;
+% % clc; clear; close all;
 %% Create a TSE sequence
 addpath(genpath('pulseq'));
 addpath(genpath('prep'  ));
@@ -35,10 +35,11 @@ params.nPE              = 100;
 params.n3D              = 80;
 params.MatrixSize       = [params.nRO, params.nPE, params.n3D];       % [a.u.] RO x PE x 3D
 
-params.AccelerationPE   = 1  ; % acceleration factor for phase direction.
-params.Acceleration3D   = 1  ; % acceleration factor for partition direction.
+params.AccelerationPE   = 3  ; % acceleration factor for phase direction.
+params.Acceleration3D   = 3  ; % acceleration factor for partition direction.
 params.nRefLinePE       = 24 ; % Number of fully sampled lines at center, along PE
 params.nRefLine3D       = 24 ; % Number of fully sampled lines at center, along 3D
+params.CAIPIShift       = 2  ;
 params.DimFast          = 'PE' ; % 'PE' or '3D'; which dimension is stepped through first
 
 % Array of TEs. Non-positive values will be interperted as using minimum TE possible.

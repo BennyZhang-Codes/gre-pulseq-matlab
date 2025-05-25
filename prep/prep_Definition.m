@@ -27,8 +27,12 @@ function [seq, str_res, str_mat, str_r] = prep_Definition(seq, Actual, PE3D)
 
     str_res    = [str_res_RO, 'x', str_res_PE, 'x', str_res_3D];
     str_mat    = [num2str(Actual.nRO), 'x', num2str(Actual.nPE), 'x', num2str(Actual.n3D)];
-
-    str_r      = [num2str(Actual.AccelerationPE), 'x', num2str(Actual.Acceleration3D)];
+    
+    if Actual.CAIPIShift > 0
+        str_r      = [num2str(Actual.AccelerationPE), 'x', num2str(Actual.Acceleration3D), 'd', num2str(Actual.CAIPIShift)];
+    else
+        str_r      = [num2str(Actual.AccelerationPE), 'x', num2str(Actual.Acceleration3D)];
+    end
 
 
     % readout oversampling 
@@ -57,6 +61,8 @@ function [seq, str_res, str_mat, str_r] = prep_Definition(seq, Actual, PE3D)
     seq.setDefinition('Excit_FlipAngle'      , Actual.flipEx             );
     seq.setDefinition('Excit_Duration'       , Actual.tEx_Slab           );
     seq.setDefinition('Excit_TBP'            , Actual.tbpEx_Slab         );
+
+    seq.setDefinition('CAIPIShift'           , Actual.CAIPIShift         );
 
     seq.setDefinition('nDummy'               , Actual.nDummy             );
     seq.setDefinition('BW'                   , Actual.BWPerPixel         );

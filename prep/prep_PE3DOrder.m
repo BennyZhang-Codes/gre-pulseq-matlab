@@ -91,7 +91,8 @@ function [PE3D] = prep_PE3DOrder(Actual)
     
     % Set Sampling masks 
     if (bAcceleration1 || bAcceleration2)
-        [bSample, bRefFull, bImaAndRefFull] = Ordering.Utils.GrappaMasks(n1, n2, Acceleration1, Acceleration2, nRefLine1, nRefLine2) ;
+        % [bSample, bRefFull, bImaAndRefFull] = Ordering.Utils.GrappaMasks(n1, n2, Acceleration1, Acceleration2, nRefLine1, nRefLine2) ;
+        [bSample, bRefFull, bImaAndRefFull] = CAIPIRINHAMasks(n1, n2, Acceleration1, Acceleration2, nRefLine1, nRefLine2, Actual.CAIPIShift) ;
     else
         [bSample, bRefFull, bImaAndRefFull] = Ordering.Utils.GrappaMasks(n1, n2, 1, 1) ;
     end
