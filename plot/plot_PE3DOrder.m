@@ -1,9 +1,18 @@
-function [fig] = plot_PE3DOrder(Actual, PE3D)
+function [fig] = plot_PE3DOrder(Actual, PE3D, color_facecolor, color_label, color_map)
     PE3DOrder  = PE3D.PE3DOrder ;
     bSample    = PE3D.bSample   ;
 
-    color_facecolor = "#FFFFFF";
-    color_label     = "#CCCCCC";
+    % Set default values for optional parameters
+    if nargin < 3 || isempty(color_facecolor)
+        color_facecolor = "#1F1F1F";
+    end
+    if nargin < 4 || isempty(color_label)
+        color_label = "#CCCCCC";
+    end
+    if nargin < 5 || isempty(color_map)
+        color_map = jet;
+    end
+
     fig_width       = 800;
     fig_height      = 800;
     position = [(1920-fig_width)/2, (1080-fig_height)/2, fig_width, fig_height];
@@ -33,11 +42,17 @@ function [fig] = plot_PE3DOrder(Actual, PE3D)
         end
     end
 
-    cmap = jet(length(PE3DOrder)+1);
+    cmap = color_map(length(PE3DOrder)+1);
     cmap(1,:) = [0,0,0];
     imshow(im_PE3DOrder);      % 显示矩阵
 
-    title(sprintf('R = %d x %d, nRef = %d x %d', Actual.AccelerationPE, Actual.Acceleration3D, ...
+    if Actual.CAIPIShift > 0
+        str_r      = sprintf('{%s}^{(%s)}', num2str(Actual.Acceleration3D), num2str(Actual.CAIPIShift));
+    else
+        str_r      = [num2str(Actual.Acceleration3D)];
+    end
+
+    title(sprintf('R = %d x %s, nRef = %d x %d', Actual.AccelerationPE, str_r, ...
         Actual.nRefLinePE, Actual.nRefLine3D), 'FontWeight', 'bold', 'Color', 'r');
 
     % impixelinfo;
@@ -48,17 +63,16 @@ function [fig] = plot_PE3DOrder(Actual, PE3D)
 
     % 设置 colorbar 样式
     cb.Box = 'on';              
-    cb.EdgeColor = 'r';          
+    cb.EdgeColor = color_label;          
     cb.Label.String = 'Order'; 
-    cb.Label.Color = 'r';       
-    cb.Color = '#CCCCCC';             
+    cb.Label.Color = color_label;       
+    cb.Color = color_label;             
     cb.FontSize = 10;           
 
-
     ax = gca;
-    ax.Position = [0. 0.03 0.85 0.9];      
+    ax.Position = [0. 0.03 0.85 0.80];      
     ax.LooseInset = [0 0 0 0]; 
-    set(fig, 'Color', '#000000');  
+    set(fig, 'Color', color_facecolor);  
     set(fig, 'InvertHardcopy', 'off');  
     set(fig, 'PaperUnits', 'centimeters');
     set(fig, 'PaperPosition', [0, 0, fig_width_cm, fig_height_cm]);
