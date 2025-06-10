@@ -1,4 +1,4 @@
-% % clc; clear; close all;
+clc; clear; close all;
 %% Create a TSE sequence
 addpath(genpath('pulseq'));
 addpath(genpath('prep'  ));
@@ -29,17 +29,18 @@ params.fovPE            = 200e-3;
 params.fov3D            = 160e-3;
 params.FOV              = [params.fovRO, params.fovPE, params.fov3D]; % [m] RO x PE x 3D
 params.SlabThickness    = params.FOV(3); % [m] empty mean no slab selection, i.e. excite all
+params.SliceOverSampling= 10 ; % [%]
 
 params.nRO              = 100; 
 params.nPE              = 100; 
 params.n3D              = 80;
 params.MatrixSize       = [params.nRO, params.nPE, params.n3D];       % [a.u.] RO x PE x 3D
 
-params.AccelerationPE   = 3  ; % acceleration factor for phase direction.
-params.Acceleration3D   = 3  ; % acceleration factor for partition direction.
-params.nRefLinePE       = 24 ; % Number of fully sampled lines at center, along PE
-params.nRefLine3D       = 24 ; % Number of fully sampled lines at center, along 3D
-params.CAIPIShift       = 2  ;
+params.AccelerationPE   = 1  ; % acceleration factor for phase direction.
+params.Acceleration3D   = 1  ; % acceleration factor for partition direction.
+params.nRefLinePE       = 0 ; % Number of fully sampled lines at center, along PE
+params.nRefLine3D       = 0 ; % Number of fully sampled lines at center, along 3D
+params.CAIPIShift       = 0  ;
 params.DimFast          = 'PE' ; % 'PE' or '3D'; which dimension is stepped through first
 
 % Array of TEs. Non-positive values will be interperted as using minimum TE possible.
@@ -54,7 +55,7 @@ params.nTE              = numel(params.TE);
 % When acquiring with multiple TEs, should the RO gradient alternate in
 % sign (faster) or always have the same sign (slower). Switching sign is
 % refered to as bi-polar
-params.bBipolarROGrads  = true ;
+params.bBipolarROGrads  = false ;
 
 
 % RF pulse
@@ -143,15 +144,14 @@ Actual.DimFast          = 'PE';
 Actual.CutoffFreq       = [];
 [PE3D] = prep_PE3DOrder(Actual);
 [fig] = plot_PE3D(Actual, PE3D);
-[fig] = plot_PE3DOrder(Actual, PE3D);
-
+[fig] = plot_PE3DOrder(Actual, PE3D, [], []);
+% [seq, str_res, str_mat, str_r] = prep_Definition(seq, Actual, PE3D);
+% print(fig, '-dpng', '-loose', '-r300', '-image', sprintf('data/PE3DOrder_%s_PE_Ordered_LocalShuffle.png', str_r));
 %% Prephaser & Rephaser
 [Grad] = prep_PreRephaser(Actual, Grad, PE3D, sys);
 
 %% Spoiler(s)
 [Grad] = prep_Spoiler(Actual, Grad, sys);
-
-% TR filler delay
 
 % Initialize a zero delay that will be modified later on
 % to ensure we get the desired TR (if possible).
@@ -421,17 +421,17 @@ end
 
 outpath = 'E:/pulseq/idea/pulseq_150/GRE/';
 
-seqname = sprintf('GRE_%s_%s_%s_tr%s_%ste_Bi', str_res, str_mat, str_r, ...
+seqname = sprintf('GRE_%s_%s_%s_tr%s_%ste_Mono', str_res, str_mat, str_r, ...
     num2str(Actual.TR*1e3), num2str(Actual.nTE));
 seq.write(strcat(outpath, seqname,'.seq'));
 save(strcat(outpath, seqname),'params','Actual', 'PE3D');
 % fig = seq.plot('Label', 'LIN,SLC,ECO,REP');
 % print(fig.f, '-dpng', '-loose', '-r300', '-image', sprintf('%s_allTR.png', seqname));
 
-fig = seq.plot('Label', 'LIN,PAR,ECO,REP', 'timeRange', [0, 7*Actual.TR]);
+fig = seq.plot('Label', 'LIN,PAR,ECO,REP', 'timeRange', [6*Actual.TR, 7*Actual.TR]+seq.blockDurations(1));
 % print(fig.f, '-dpng', '-loose', '-r300', '-image', sprintf('%s_1TR.png', seqname));
 %% k-space trajectory calculation
-% [ktraj_adc, t_adc, ktraj, t_ktraj, t_excitation, t_refocusing] = seq.calculateKspacePP();
+[ktraj_adc, t_adc, ktraj, t_ktraj, t_excitation, t_refocusing] = seq.calculateKspacePP();
 % 
 % % fig = plot_kspace(ktraj, ktraj_adc);
 % figure; 
@@ -443,10 +443,10 @@ fig = seq.plot('Label', 'LIN,PAR,ECO,REP', 'timeRange', [0, 7*Actual.TR]);
 % % calculateKspacePP() should return physical x, y, z and not logical RO
 % % PE and 3D.
 % legend('k_x', 'k_y', 'k_z') ;
-% 
-% % Plot k-space trajectory (3D)
-% % ---------------------------
-% figure; 
+
+% Plot k-space trajectory (3D)
+% ---------------------------
+% fig = figure; 
 % plot3(ktraj(1,:), ktraj(2,:), ktraj(3,:),'b') ;
 % hold on ; 
 % plot3(ktraj_adc(1,:), ktraj_adc(2,:), ktraj_adc(3,:), 'r.') ; 
@@ -458,19 +458,85 @@ fig = seq.plot('Label', 'LIN,PAR,ECO,REP', 'timeRange', [0, 7*Actual.TR]);
 % zlabel('k_z [1/m]') ;
 % grid on ;
 % title('3D k-space') ;
-% legend('trajectory', 'ADC')
+% legend('trajectory', 'ADC', Location='northeast')
+% outpath = sprintf('data/%s_kspace.png', seqname);
+% print(fig, '-dpng', '-loose', '-r300', '-image', outpath);
+
+% %% evaluate label settings more specifically
 % 
-%% evaluate label settings more specifically
+% lbls=seq.evalLabels('evolution','adc');
+% lbl_names=fieldnames(lbls);
+% figure; hold on;
+% for n=1:length(lbl_names)
+%     plot(lbls.(lbl_names{n}));
+% end
+% legend(lbl_names(:));
+% title('evolution of labels/counters/flags');
+% xlabel('adc number');
 
-lbls=seq.evalLabels('evolution','adc');
-lbl_names=fieldnames(lbls);
-figure; hold on;
-for n=1:length(lbl_names)
-    plot(lbls.(lbl_names{n}));
+%%
+fig = figure;
+
+% 使用线条显示轨迹
+plot3(ktraj(1,:), ktraj(2,:), ktraj(3,:), 'Color', '#1d6996');
+hold on;
+
+% 使用 scatter3 让 ADC 点根据 kz 值着色
+zVals = ktraj_adc(3,:);  % z 坐标
+cVals = zVals;           % 用 z 值作为颜色映射依据
+
+% 你可以使用 colormap，例如 jet/parula/turbo/hsv 等
+scatter3(ktraj_adc(1,:), ktraj_adc(2,:), ktraj_adc(3,:), 3, cVals, 'filled');
+
+% 坐标轴和标题设置
+xlabel('k_x [1/m]');
+ylabel('k_y [1/m]');
+zlabel('k_z [1/m]');
+grid on;
+title('3D k-space');
+
+% 颜色映射
+colormap(summer);      % 可换成 jet, parula, hsv 等
+legend('trajectory', 'ADC', 'Location', 'northeast');
+
+%%
+fig = fig.f;
+%%
+color_label     = '#1F1F1F';
+color_facecolor = '#EEEEEE';
+
+% set(fig, 'InvertHardcopy', 'off');  
+set(fig, 'PaperUnits', 'centimeters');
+set(fig, 'PaperPosition', [0, 0, 15, 12]);
+ax = findall(fig, 'Type', 'axes');  % 如果有多个 axes，也能同时处理
+set(findall(fig, '-property', 'FontSize'), 'FontSize', 12); %  10, 8
+lgds = findall(fig, 'Type', 'legend');
+for i = 1:length(lgds)
+    % lgds(i).Location = 'northeast';
+    lgds(i).FontSize = 10;   %  8, 4
+    lgds(i).Box = 'off';  % 去掉边框
+    lgds(i).ItemTokenSize = [2, 2];
+    lgds(i).TextColor = color_label;
 end
-legend(lbl_names(:));
-title('evolution of labels/counters/flags');
-xlabel('adc number');
+axesHandles = findall(gcf, 'Type', 'Axes');
 
+set(gcf, 'Color', 'k');
 
+for i = 1:length(axesHandles)
+    ax = axesHandles(i);
+    set(ax, 'Color', color_facecolor);
 
+    set(ax, 'XColor', color_label, 'YColor', color_label, 'ZColor', color_label);
+
+    ax.YLabel.Color = color_label;
+    ax.XLabel.Color = color_label;
+
+    h = findall(ax, 'Type', 'Text');
+    set(h, 'Color', color_label);
+end
+set(fig, 'Color', color_facecolor);  
+set(fig, 'InvertHardcopy', 'off');  
+% 
+outpath = sprintf('data/%s_kspace.png', seqname);
+% % exportgraphics(fig, outpath, 'Resolution', 300, 'ContentType', 'image', 'BackgroundColor', 'none');
+% print(fig, '-dpng', '-loose', '-r300', '-image', outpath);

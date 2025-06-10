@@ -11,7 +11,8 @@ function [RF, Grad] = prep_RF(Actual, RF, Grad, sys)
         [RF.rf_ex] = mr.makeBlockPulse(fa, sys, 'duration', Actual.tEx_All, 'use', 'excitation') ;
     else                               % slab selective excitation
         [RF.rf_ex, Grad.G3D_Ex, Grad.G3D_Ex_Ref] = mr.makeSincPulse(fa, sys, 'duration', Actual.tEx_Slab, ...
-            'timeBwProduct', Actual.tbpEx_Slab, 'apodization', 0.5, 'sliceThickness', Actual.SlabThickness, 'use', 'excitation') ;
+            'timeBwProduct', Actual.tbpEx_Slab, 'apodization', 0.5, ...
+            'sliceThickness', Actual.SlabThickness/(1+Actual.SliceOverSampling/100), 'use', 'excitation') ;
         % Fix direction & sign (of two gradients)
         Grad.G3D_Ex.channel           = Axis3D                                        ;
         Grad.G3D_Ex.amplitude         = SignCorr.(Axis3D) * Grad.G3D_Ex.amplitude     ;

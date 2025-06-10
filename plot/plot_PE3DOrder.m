@@ -42,7 +42,7 @@ function [fig] = plot_PE3DOrder(Actual, PE3D, color_facecolor, color_label, colo
         end
     end
 
-    cmap = color_map(length(PE3DOrder)+1);
+    cmap = jet(length(PE3DOrder)+1);
     cmap(1,:) = [0,0,0];
     imshow(im_PE3DOrder);      % 显示矩阵
 
