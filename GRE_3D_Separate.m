@@ -1,10 +1,11 @@
-% % clc; clear; close all;
-%% Create a TSE sequence
+clc; clear; close all;
+%% Create a 3D GRE sequence with multiple TEs and separate acquisitions for each TE (i.e. single echo per TR).
 addpath(genpath('pulseq'));
 addpath(genpath('prep'  ));
 addpath(genpath('check' ));
 addpath(genpath('plot'  ));
 addpath(genpath('utils' ));
+
 % Instantiation and gradient limits
 sys = mr.opts('MaxGrad', 40, 'GradUnit', 'mT/m', ...
     'MaxSlew', 200, 'SlewUnit', 'T/m/s', ...
@@ -19,95 +20,94 @@ ADC   = struct();
 Delay = struct();
 Label = struct();
 %% Sequence parameters
-params.NoiseScan        = 'on'; 
-params.nDummy           = 5; 
-params.nRep             = 1;
+Setup.ScannerType      = 'Terra-XR';  % for pns_check
+
+Setup.NoiseScan        = 'on'; 
+Setup.nDummy           = 5; 
+Setup.nRep             = 1;
 
 % 1
-params.fovRO            = 200e-3;   %
-params.fovPE            = 200e-3;
-params.fov3D            = 160e-3;
-params.FOV              = [params.fovRO, params.fovPE, params.fov3D]; % [m] RO x PE x 3D
-params.SlabThickness    = params.FOV(3); % [m] empty mean no slab selection, i.e. excite all
+Setup.fovRO            = 200e-3;   %
+Setup.fovPE            = 200e-3;
+Setup.fov3D            = 100e-3;
+Setup.FOV              = [Setup.fovRO, Setup.fovPE, Setup.fov3D]; % [m] RO x PE x 3D
+Setup.SlabThickness    = Setup.FOV(3); % [m] empty mean no slab selection, i.e. excite all
+Setup.SliceOverSampling= 10 ; % [%]
 
-params.nRO              = 100; 
-params.nPE              = 100; 
-params.n3D              = 80;
-params.MatrixSize       = [params.nRO, params.nPE, params.n3D];       % [a.u.] RO x PE x 3D
+Setup.nRO              = 40; 
+Setup.nPE              = 40; 
+Setup.n3D              = 20;
+Setup.MatrixSize       = [Setup.nRO, Setup.nPE, Setup.n3D];       % [a.u.] RO x PE x 3D
 
-params.AccelerationPE   = 1  ; % acceleration factor for phase direction.
-params.Acceleration3D   = 1  ; % acceleration factor for partition direction.
-params.nRefLinePE       = 24 ; % Number of fully sampled lines at center, along PE
-params.nRefLine3D       = 24 ; % Number of fully sampled lines at center, along 3D
-params.CAIPIShift       = 0  ;
-params.DimFast          = 'PE' ; % 'PE' or '3D'; which dimension is stepped through first
+Setup.AccelerationPE   = 1  ; % acceleration factor for phase direction.
+Setup.Acceleration3D   = 1  ; % acceleration factor for partition direction.
+Setup.nRefLinePE       = 0 ; % Number of fully sampled lines at center, along PE
+Setup.nRefLine3D       = 0 ; % Number of fully sampled lines at center, along 3D
+Setup.CAIPIShift       = 0  ;
+Setup.DimFast          = 'PE' ; % 'PE' or '3D'; which dimension is stepped through first
 
 % Array of TEs. Non-positive values will be interperted as using minimum TE possible.
-params.TE               = [2.1, 3.6, 5.1]*1e-3; % non-positive values mean use shortest TE.
-% 2.1, 3.6, 5.1   % 2.10, 3.12, 4.14 % -1, -1, -1
-params.TR               = 25e-3; % [s]
-params.BWPerPixel       = 1250 ;       % [Hz/pixel] updated later to obey ADC raster
+Setup.TE               = [2.1, 3.6, 5.1]*1e-3; % non-positive values mean use shortest TE.
+Setup.TR               = 25e-3; % [s]
+Setup.BWPerPixel       = 1250 ;       % [Hz/pixel] updated later to obey ADC raster
 
-params.nTE              = numel(params.TE);
-
+Setup.nTE              = numel(Setup.TE);
 
 % When acquiring with multiple TEs, should the RO gradient alternate in
 % sign (faster) or always have the same sign (slower). Switching sign is
 % refered to as bi-polar
-params.bBipolarROGrads  = false ;
-
+Setup.bBipolarROGrads  = false ;
 
 % RF pulse
 % Define slab-selective excitation (in case it is requested)
 % Original Definitions are based on Siemens a_gre (VE12U)
-params.flipEx           = 10   ; % [deg]
-params.tEx_Slab         = 2.0e-3 ; % [s]
-params.tbpEx_Slab       = 8   ; % [a.u.]
+Setup.flipEx           = 10   ; % [deg]
+Setup.tEx_Slab         = 2.0e-3 ; % [s]
+Setup.tbpEx_Slab       = 8   ; % [a.u.]
 
 % Define non-selective excitation 
 % Original Definitions are based on Siemens a_gre (VE12U)
-params.tEx_All          = 0.1e-3 ; % [s]
-
+Setup.tEx_All          = 0.1e-3 ; % [s]
 
 % RF & Gradient Spoiling
-params.RFSpoilIncDeg    = 117 ; % [deg] RF spoiling increment
+Setup.RFSpoilIncDeg    = 117 ; % [deg] RF spoiling increment
 
-% Spoiler area can be defined either explicitly in mT*us/m or relative to params
+% Spoiler area can be defined either explicitly in mT*us/m or relative to Setup
 % the net area of gradients required to achieve desired resolution. Two
 % sets of variables are given at least one must be empty.
-params.SpoilerArea_RO       = [] ; % [mT*us/m]
-params.SpoilerArea_PE       = [] ; % [mT*us/m]
-params.SpoilerArea_3D       = [] ; % [mT*us/m]
-params.SpoilerAreaFactor_RO = 2 ;
-params.SpoilerAreaFactor_PE = 2 ;
-params.SpoilerAreaFactor_3D = 2 ;
+Setup.SpoilerArea_RO       = [] ; % [mT*us/m]
+Setup.SpoilerArea_PE       = [] ; % [mT*us/m]
+Setup.SpoilerArea_3D       = [] ; % [mT*us/m]
+Setup.SpoilerAreaFactor_RO = 2 ;
+Setup.SpoilerAreaFactor_PE = 2 ;
+Setup.SpoilerAreaFactor_3D = 2 ;
 
 
-% ---------
-% Shuffling
-% ---------
+% ------------------------------------------------------
+% Shuffling https://github.com/RitaSchmidt/Shuffle3DGRE
+% ------------------------------------------------------
 % Cutoff frequency (if relevant): 
 % - [] (empty) - no shuffling.
 % - 0 - full randomization.
 % - > 0 - Cutoff to use for scrambling (if relevant)
-params.CutoffFreq = [] ; 1/20 ; % [Hz] 
+Setup.CutoffFreq = [] ; 1/20 ; % [Hz] 
 
 % Set trajectory
 % set function handle to function used to order the trajectory.
 % All functions accept the same inputs, although might not use them all.
-params.fOrdering = @Ordering.Ordered_LocalShuffle ;
-% params.fOrdering = @Ordering.SpiralRS_LocalShuffle ;
-% params.fOrdering = @Ordering.Ordered_SegmentedShuffle ;
-% params.fOrdering = @Ordering.SpiralSquare_LocalShuffle ;
-% params.fOrdering = @Ordering.Gilbert ;
-% params.fOrdering = @Ordering.Spiral_LocalShuffle ;
+Setup.fOrdering = @Ordering.Ordered_LocalShuffle ;
+% Setup.fOrdering = @Ordering.SpiralRS_LocalShuffle ;
+% Setup.fOrdering = @Ordering.Ordered_SegmentedShuffle ;
+% Setup.fOrdering = @Ordering.SpiralSquare_LocalShuffle ;
+% Setup.fOrdering = @Ordering.Gilbert ;
+% Setup.fOrdering = @Ordering.Spiral_LocalShuffle ;
 % Optional structure of extra parameters which are specific to the ordering
 % function used.
-params.OrderingExtraParamsStruct = [] ;
-% params.OrderingExtraParamsStruct.bElliptic = true ;
+Setup.OrderingExtraParamsStruct = [] ;
+% Setup.OrderingExtraParamsStruct.bElliptic = true ;
 
 % Random seed for shuffling
-params.RandomSeed = 0 ;
+Setup.RandomSeed = 0 ;
 
 %% Set orienation (non-oblique)
 % Set axes (X/Y/Z vs. RO/PE/3D - oblique not supported) 
@@ -115,19 +115,19 @@ params.RandomSeed = 0 ;
 % 'Orientation mapping' setting.
 
 % mapping of RO/PE/3D to X/Y/Z
-params.AxisRO = 'x' ;
-params.AxisPE = 'y' ;
-params.Axis3D = 'z' ; 
+Setup.AxisRO = 'x' ;
+Setup.AxisPE = 'y' ;
+Setup.Axis3D = 'z' ; 
 
 % Flip or not X/Y/Z to match patient positive/negative directions. Usefull
 % if reconstruction is done by system to get correct orientation of images.
-params.SignCorr.x = -1 ;
-params.SignCorr.y = -1 ;
-params.SignCorr.z = -1 ;
+Setup.SignCorr.x = -1 ;
+Setup.SignCorr.y = -1 ;
+Setup.SignCorr.z = -1 ;
 
 %%
-Actual = params;
-[Actual] = prep_TRTE(Actual, params, sys);
+Actual = Setup;
+[Actual] = prep_TRTE(Actual, Setup, sys);
 
 %% RF
 [RF, Grad] = prep_RF(Actual, RF, Grad, sys);
@@ -142,8 +142,8 @@ Actual = params;
 Actual.DimFast          = 'PE';
 Actual.CutoffFreq       = [];
 [PE3D] = prep_PE3DOrder(Actual);
-[fig] = plot_PE3D(Actual, PE3D);
-[fig] = plot_PE3DOrder(Actual, PE3D);
+plot_PE3D(Actual, PE3D);
+plot_PE3DOrder(Actual, PE3D);
 
 %% Prephaser & Rephaser
 [Grad] = prep_PreRephaser(Actual, Grad, PE3D, sys);
@@ -391,50 +391,42 @@ end
 
 %% timing & PNS & definition
 [seq] = check_Timing(seq);
-% [seq] = check_PNS(seq);
+[seq] = check_PNS(seq, Setup);
 [seq, str_res, str_mat, str_r] = prep_Definition(seq, Actual, PE3D);
 
-outpath = 'E:/pulseq/idea/pulseq_150/GRE/';
+outpath = '';
 
 seqname = sprintf('GRE_%s_%s_%s_tr%s_%ste_Sepa', str_res, str_mat, str_r, ...
     num2str(Actual.TR*1e3), num2str(Actual.nTE));
-seq.write(strcat(outpath, seqname,'.seq'));
-save(strcat(outpath, seqname),'params','Actual', 'PE3D');
-% fig = seq.plot('Label', 'LIN,SLC,ECO,REP');
-% print(fig.f, '-dpng', '-loose', '-r300', '-image', sprintf('%s_allTR.png', seqname));
+% seq.write(strcat(outpath, seqname,'.seq'));
+% save(strcat(outpath, seqname),'Setup','Actual', 'PE3D');
 
-fig = seq.plot('Label', 'LIN,PAR,ECO,REP', 'timeRange', [0, 7*Actual.TR]);
-% print(fig.f, '-dpng', '-loose', '-r300', '-image', sprintf('%s_1TR.png', seqname));
+seq.plot('Label', 'LIN,PAR,ECO,REP', 'timeRange', [0, 7*Actual.TR]);
+
 %% k-space trajectory calculation
-% [ktraj_adc, t_adc, ktraj, t_ktraj, t_excitation, t_refocusing] = seq.calculateKspacePP();
-% 
-% % fig = plot_kspace(ktraj, ktraj_adc);
-% figure; 
-% plot(t_ktraj.', ktraj.') ;
-% hold on ;
-% xlabel('t [s]') ;
-% ylabel('k [1/m]') ;
-% title('k-space components as functions of time') ;
-% % calculateKspacePP() should return physical x, y, z and not logical RO
-% % PE and 3D.
-% legend('k_x', 'k_y', 'k_z') ;
-% 
-% % Plot k-space trajectory (3D)
-% % ---------------------------
-% figure; 
-% plot3(ktraj(1,:), ktraj(2,:), ktraj(3,:),'b') ;
-% hold on ; 
-% plot3(ktraj_adc(1,:), ktraj_adc(2,:), ktraj_adc(3,:), 'r.') ; 
-% 
-% % calculateKspacePP() should return physical x, y, z and not logical RO
-% % PE and 3D.
-% xlabel('k_x [1/m]') ;
-% ylabel('k_y [1/m]') ;
-% zlabel('k_z [1/m]') ;
-% grid on ;
-% title('3D k-space') ;
-% legend('trajectory', 'ADC')
-% 
+[ktraj_adc, t_adc, ktraj, t_ktraj, t_excitation, t_refocusing] = seq.calculateKspacePP();
+
+figure; 
+plot(t_ktraj.', ktraj.') ;
+hold on ;
+xlabel('t [s]') ;
+ylabel('k [1/m]') ;
+title('k-space components as functions of time') ;
+legend('k_x', 'k_y', 'k_z') ;
+
+% Plot k-space trajectory (3D)
+% ---------------------------
+figure; 
+plot3(ktraj(1,:), ktraj(2,:), ktraj(3,:),'b') ;
+hold on ; 
+plot3(ktraj_adc(1,:), ktraj_adc(2,:), ktraj_adc(3,:), 'r.') ; 
+
+xlabel('k_x [1/m]') ;
+ylabel('k_y [1/m]') ;
+zlabel('k_z [1/m]') ;
+grid on ;
+title('3D k-space') ;
+legend('trajectory', 'ADC')
 %% evaluate label settings more specifically
 
 lbls=seq.evalLabels('evolution','adc');
