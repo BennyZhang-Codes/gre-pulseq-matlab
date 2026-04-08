@@ -5,3 +5,6 @@
 [submodule "Shuffle3DGRE"]
 	path = Shuffle3DGRE
 	url = https://github.com/RitaSchmidt/Shuffle3DGRE.git
+[submodule "check/safe_pns_prediction"]
+	path = check/safe_pns_prediction
+	url = https://github.com/filip-szczepankiewicz/safe_pns_prediction
