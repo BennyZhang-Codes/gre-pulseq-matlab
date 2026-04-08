@@ -2,3 +2,6 @@
 	path = pulseq
 	url = https://github.com/pulseq/pulseq.git
 	branch = master
+[submodule "Shuffle3DGRE"]
+	path = Shuffle3DGRE
+	url = https://github.com/RitaSchmidt/Shuffle3DGRE.git
