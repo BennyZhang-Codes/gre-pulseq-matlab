@@ -5,7 +5,7 @@ addpath(genpath('prep'  ));
 addpath(genpath('check' ));
 addpath(genpath('plot'  ));
 addpath(genpath('utils' ));
-addpath(genpath('Shuffle3DGRE/Shuffle3DGRE-pulseq/'))
+addpath(genpath('Shuffle3DGRE/Shuffle3DGRE-pulseq/'));
 
 % Instantiation and gradient limits
 sys = mr.opts('MaxGrad', 40, 'GradUnit', 'mT/m', ...
@@ -27,7 +27,6 @@ Setup.NoiseScan        = 'on';
 Setup.nDummy           = 5; 
 Setup.nRep             = 1;
 
-% 1
 Setup.fovRO            = 200e-3;  
 Setup.fovPE            = 200e-3;
 Setup.fov3D            = 160e-3;
